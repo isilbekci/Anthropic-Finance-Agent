@@ -1,0 +1,85 @@
+import gradio as gr
+import os
+import anthropic
+import logging
+from dotenv import load_dotenv
+
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
+
+def identify_question_type(prompt):
+    """
+    Identify the type of finance-related question.
+    """
+    if "inflation" in prompt.lower():
+        return "inflation"
+    elif "stock" in prompt.lower():
+        return "stock_market"
+    elif "interest rate" in prompt.lower() or "rates" in prompt.lower():
+        return "interest_rates"
+    elif "economy" in prompt.lower():
+        return "economy"
+    else:
+        return "general_finance"
+
+def get_follow_up_question(question_type):
+    """
+    Generate follow-up questions based on the type of question.
+    """
+    follow_up = {
+        "inflation": "Would you like to know how inflation affects different sectors?",
+        "stock_market": "Do you want advice on how to adjust your portfolio?",
+        "interest_rates": "Are you interested in how interest rate changes affect bond markets?",
+        "economy": "Would you like to know how current economic policies impact market trends?",
+        "general_finance": "Do you have any specific areas in finance you'd like to dive deeper into?"
+    }
+    return follow_up.get(question_type, "Would you like to ask something else?")
+
+def talk_to_anthropic(prompt):
+    """
+    Sends a prompt to the Anthropic Claude model and retrieves the LLM response.
+    """
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if api_key is None:
+        raise ValueError("API key is not set. Please set the ANTHROPIC_API_KEY environment variable.")
+    
+    client = anthropic.Anthropic(api_key=api_key)
+    
+    model = "claude-3-opus-20240229"
+
+    response = client.messages.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=300
+    )
+
+    return response.content[0].text
+
+def respond_to_user(message, history):
+    """
+    Respond to the user's input, identify question type, get response from Anthropic, and generate follow-up question.
+    """
+    question_type = identify_question_type(message)
+    logging.info(f"Question type identified: {question_type}")
+
+    anthrophic_response = talk_to_anthropic(message)
+    history.append([message, anthrophic_response])  
+
+    follow_up = get_follow_up_question(question_type)
+
+    return history
+
+def clear_chat():
+    """Function to clear chat history."""
+    return []
+
+with gr.Blocks() as demo:
+    chatbot = gr.Chatbot(label="Finance Assistant")
+    user_input = gr.Textbox(label="Your message", placeholder="Ask a finance-related question...")
+    submit_button = gr.Button("Submit")
+    clear_button = gr.Button("Clear Chat")
+
+    submit_button.click(respond_to_user, [user_input, chatbot], [chatbot])
+    clear_button.click(clear_chat, None, chatbot)
+
+demo.launch()
