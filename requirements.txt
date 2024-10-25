@@ -1,0 +1,4 @@
+gradio
+anthropic
+logging
+python-dotenv
